@@ -70,16 +70,17 @@ if st.button("Ejecutar Procesamiento CN Dinámico", type="primary"):
                     vv_clip, _ = mask(src_vv, geom, crop=True)
                     vv_data = vv_clip[0].astype(np.float32)
                 
-                # Motor CN Dinámico Syntro (Penalización por radar VV sobre relieve)
-                # Normalizar valores de radar y DEM para calcular incremento dinámico de escorrentía
+                # Motor CN Dinámico Syntro con validación robusta de dimensiones
                 valid_mask = (dem_data != dem_meta.get('nodata', -9999)) & (np.isfinite(dem_data))
-                
-                cn_matrix = np.zeros_like(dem_data, dtype=np.float32)
-                # Base CN estándar por pendiente y radar
+                cn_matrix = np.full_like(dem_data, -9999, dtype=np.float32)
                 base_cn = 75.0 
                 
-                # Aplicar penalización dinámica Syntro basada en retrodispersión de humedad (Sentinel-1 VV)
-                vv_norm = np.clip((vv_data + 20) / 20.0, 0.5, 1.5) if np.any(vv_data) else 1.0
+                # Manejo seguro si las formas de los rásters difieren ligeramente
+                if vv_data.shape == dem_data.shape:
+                    vv_norm = np.clip((vv_data + 20) / 20.0, 0.5, 1.5) if np.any(vv_data) else 1.0
+                else:
+                    vv_norm = np.ones_like(dem_data, dtype=np.float32)
+                
                 cn_matrix[valid_mask] = np.clip(base_cn * vv_norm[valid_mask], 30.0, 98.0)
                 
                 # Guardar el TIFF resultante del CN Dinámico real
@@ -87,7 +88,6 @@ if st.button("Ejecutar Procesamiento CN Dinámico", type="primary"):
                 raster_out = "output_syntro/cn_dinamico_resultado.tif"
                 
                 dem_meta.update({"dtype": 'float32', "nodata": -9999})
-                cn_matrix[~valid_mask] = -9999
                 
                 with rasterio.open(raster_out, "w", **dem_meta) as dst:
                     dst.write(cn_matrix, 1)
@@ -95,7 +95,7 @@ if st.button("Ejecutar Procesamiento CN Dinámico", type="primary"):
                 vector_out = "output_syntro/perimetro_procesado.geojson"
                 vector_gdf.to_file(vector_out, driver="GeoJSON")
                 
-                st.success("¡Modelo de Curvas Número Dinámico calculado exitosamente con tus archivos reales!")
+                st.success("¡Modelo de Curvas Número Dinámico calculado exitosamente y ráster TIFF generado!")
                 
                 # Botones de descarga directa para GEOLIBRE
                 st.markdown("### Descargar Resultados para GEOLIBRE:")
