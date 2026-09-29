@@ -2,3 +2,4 @@ streamlit
 numpy
 rasterio
 geopandas
+fiona
