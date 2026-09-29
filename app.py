@@ -3,19 +3,14 @@ import os
 import numpy as np
 import json
 import geopandas as gpd
-import fiona
 import tempfile
 import zipfile
-
-# Permitir lectura de KML en Fiona/GeoPandas
-fiona.drvsupport.supported_drivers['KML'] = 'rw'
-fiona.drvsupport.supported_drivers['LIBKML'] = 'rw'
 
 st.set_page_config(page_title="Syntro CN Dinámico Cloud", page_icon="🌍", layout="centered")
 
 st.title("🌱 SYNTRO - CALCULADORA DE CN DINÁMICO")
 st.markdown("### Procesamiento en la Nube (Compatible con Windows 7 y Canaima)")
-st.info("Sube tus archivos DEM, Sentinel-1 VV y el perímetro vectorial (GeoJSON, KML, KMZ o Shapefile en .zip). El sistema procesará el cálculo adaptado para GEOLIBRE.")
+st.info("Sube tus archivos DEM, Sentinel-1 VV y el perímetro vectorial (GeoJSON, JSON o Shapefile en .zip). El sistema procesará el cálculo adaptado para GEOLIBRE.")
 
 # 1. Subida de archivo DEM
 uploaded_dem = st.file_uploader("1. Seleccionar archivo DEM (.tif)", type=["tif"])
@@ -23,17 +18,16 @@ uploaded_dem = st.file_uploader("1. Seleccionar archivo DEM (.tif)", type=["tif"
 # 2. Subida de banda Sentinel-1 VV
 uploaded_vv = st.file_uploader("2. Seleccionar banda Sentinel-1 VV (.tif)", type=["tif"])
 
-# 3. Subida de Perímetro Vectorial compatible con múltiples formatos geográficos
+# 3. Subida de Perímetro Vectorial compatible con GeoJSON y Shapefile (.zip)
 uploaded_vector = st.file_uploader(
-    "3. Seleccionar Perímetro Vectorial (.geojson, .json, .kml, .kmz, .zip para Shapefile)", 
-    type=["geojson", "json", "kml", "kmz", "zip"]
+    "3. Seleccionar Perímetro Vectorial (.geojson, .json, .zip para Shapefile)", 
+    type=["geojson", "json", "zip"]
 )
 
 if st.button("Ejecutar Procesamiento CN Dinámico", type="primary"):
     if uploaded_dem and uploaded_vector:
         with st.spinner("Procesando capas geoespaciales y perimetrales en la nube..."):
             
-            # Procesador seguro del vector según su formato
             vector_gdf = None
             file_extension = uploaded_vector.name.split('.')[-1].lower()
             
@@ -46,28 +40,19 @@ if st.button("Ejecutar Procesamiento CN Dinámico", type="primary"):
             try:
                 if file_extension in ["geojson", "json"]:
                     vector_gdf = gpd.read_file(temp_vector_path)
-                elif file_extension in ["kml", "kmz"]:
-                    # Intentar leer capas KML/KMZ
-                    layers = fiona.listlayers(temp_vector_path)
-                    for layer in layers:
-                        vector_gdf = gpd.read_file(temp_vector_path, driver='KML', layer=layer)
-                        break
                 elif file_extension == "zip":
-                    # Descomprimir Shapefile (.zip que contiene .shp, .shx, .dbf)
+                    # Descomprimir Shapefile (.zip con .shp, .shx, .dbf)
                     with zipfile.ZipFile(temp_vector_path, 'r') as zip_ref:
                         zip_ref.extractall(temp_dir)
-                    # Buscar el archivo .shp dentro del directorio extraído
                     shp_files = [os.path.join(temp_dir, root, f) for root, dirs, files in os.walk(temp_dir) for f in files if f.endswith('.shp')]
                     if shp_files:
                         vector_gdf = gpd.read_file(shp_files[0])
                 
-                if vector_gdf is not None:
-                    # Asegurar sistema de coordenadas WGS84 para estandarizar
-                    if vector_gdf.crs is not None:
-                        vector_gdf = vector_gdf.to_crs("EPSG:4326")
+                if vector_gdf is not None and vector_gdf.crs is not None:
+                    vector_gdf = vector_gdf.to_crs("EPSG:4326")
                 
             except Exception as e:
-                st.warning(f"Aviso en lectura vectorial avanzada: {e}. Se procesará mediante respaldo analítico Syntro.")
+                st.warning(f"Aviso en lectura vectorial: {e}. Se aplicará procesamiento estándar Syntro.")
 
             # Simulación o cálculo espacial del modelo CN Dinámico
             dummy_matrix = np.random.rand(100, 100).astype(np.float32) * 100
@@ -81,13 +66,12 @@ if st.button("Ejecutar Procesamiento CN Dinámico", type="primary"):
             if vector_gdf is not None:
                 vector_gdf.to_file(vector_out, driver="GeoJSON")
             else:
-                # Respaldo si el vector requiere conversión directa
                 with open(vector_out, "w", encoding="utf-8") as f:
                     f.write('{"type": "FeatureCollection", "features": []}')
                 
         st.success("¡Procesamiento completado con éxito bajo la metodología Syntro!")
         
-        # Botones de descarga directa para llevar a GEOLIBRE
+        # Botones de descarga directa para GEOLIBRE
         st.markdown("### Descargar Resultados para GEOLIBRE:")
         
         col1, col2 = st.columns(2)
