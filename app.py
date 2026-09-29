@@ -9,11 +9,21 @@ from scipy.ndimage import gaussian_filter
 import tempfile
 import zipfile
 import shapely.geometry
+from PIL import Image
 
 st.set_page_config(page_title="Syntro CN Dinámico Cloud", page_icon="🌍", layout="centered")
 
-st.title("🌱 SYNTRO - CALCULADORA DE CN DINÁMICO")
-st.markdown("### Procesamiento en la Nube (Compatible con Windows 7 y Canaima)")
+# Encabezado institucional con logotipo Syntro
+col_logo, col_title = st.columns([1, 4])
+with col_logo:
+    if os.path.exists("logo.png"):
+        st.image("logo.png", width=100)
+    else:
+        st.write("🌱")
+with col_title:
+    st.title("SYNTRO - CALCULADORA DE CN DINÁMICO")
+    st.markdown("### Procesamiento en la Nube (Compatible con Windows 7 y Canaima)")
+
 st.info("Sube tu ZIP de Sentinel-1 (VV), el DEM (.tif) y el Perímetro de la Finca. El sistema calculará el modelo hidrológico real, el área por grupos y generará los resultados listos para GEOLIBRE.")
 
 # 1. Subida de archivos
@@ -150,7 +160,6 @@ if st.button("EJECUTAR MODELO Y EXPORTAR GEOJSON", type="primary"):
                 if geom_results:
                     gdf_groups = gpd.GeoDataFrame.from_features(geom_results, crs=meta['crs'])
                     
-                    # Proyección automática a UTM métrica para cálculo exacto de área
                     if gdf_groups.crs and gdf_groups.crs.is_geographic:
                         centroid = gdf_groups.unary_union.centroid
                         utm_zone = int((centroid.x + 180) / 6) + 1
@@ -177,18 +186,15 @@ if st.button("EJECUTAR MODELO Y EXPORTAR GEOJSON", type="primary"):
                     gdf_groups['Infiltracion'] = gdf_groups['id_grupo'].map(lambda x: grupo_info.get(x, {}).get("Infiltracion", "N/A"))
                     gdf_groups['Suelo'] = gdf_groups['id_grupo'].map(lambda x: grupo_info.get(x, {}).get("Suelo", "N/A"))
 
-                    # Guardar GeoJSON enriquecido con atributos y áreas
                     gdf_groups.to_file(geojson_path, driver="GeoJSON")
 
-                st.success("¡Modelo completado! Áreas calculadas e incrustadas en el GeoJSON.")
+                st.success("¡Modelo completado! Logotipo aplicado y áreas calculadas en el GeoJSON.")
                 
-                # Mostrar resumen de áreas por grupo hidrológico en pantalla
                 st.markdown("### 📊 Resumen de Áreas por Grupo Hidrológico:")
                 resumen_df = gdf_groups.groupby('Grupo_Hidro')['area_ha'].sum().reset_index()
                 resumen_df['Porcentaje (%)'] = (resumen_df['area_ha'] / resumen_df['area_ha'].sum()) * 100
                 st.dataframe(resumen_df.style.format({'area_ha': '{:.2f} ha', 'Porcentaje (%)': '{:.2f}%'}))
 
-                # Botones de descarga para GEOLIBRE
                 st.markdown("### Descargar Resultados para GEOLIBRE:")
                 col1, col2 = st.columns(2)
                 with col1:
